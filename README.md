@@ -1,4 +1,5 @@
 Ativdade: Agrupamento Facial 
+3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
 
 Desafio: 
 
@@ -8,6 +9,7 @@ imagens agrupadas. A aplicação deve usar técnicas de aprendizado de máquina 
 processamento de imagem para identificar e agrupar rostos semelhantes. 
 
 Requisitos: 
+
 Leitura do Dataset: A aplicação deve ser capaz de carregar e ler um dataset de imagens de 
 rostos de forma aleatória, garantindo que a ordem de leitura das imagens não interfira no 
 processo. 
@@ -42,12 +44,14 @@ README.md com instruções de instalação e uso, e exemplos de saída da aplica
 Face Clustering Challenge
 Overview
 This project implements a face clustering solution using machine learning techniques. The goal is to group a set of face images into clusters based on similarity, ensuring that 40 images are grouped into 10 clusters, with exactly 4 images per cluster.
+###############################################################################################################################################
 
 The solution leverages the FaceNet model for facial embedding extraction and K-Means clustering to group the embeddings. Post-processing ensures the cluster sizes are fixed to 4 images.
 
 Challenge Requirements
 Objective
 Develop an application that:
+################################################################################################################################################
 
 Reads a dataset of face images.
 Clusters the images into groups based on facial similarity.
@@ -124,7 +128,7 @@ Visualizations of the clusters are displayed, with 4 images per cluster.
 Output Details
 Console Output
 The script prints file paths for each cluster, for example:
-
+#########################################################################################################################
 Cluster 0:
   - dataset_faces/image1.jpg
   - dataset_faces/image2.jpg
