@@ -1,39 +1,36 @@
 import os
 import cv2
 import numpy as np
-from sklearn.cluster import DBSCAN
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input
-from tensorflow.keras.applications import InceptionResNetV2
+from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import normalize
 import matplotlib.pyplot as plt
+from keras_facenet import FaceNet
+import random
 
-# Caminhos do dataset e dos pesos do modelo
-dataset_path = "./dataset_faces"  # Altere conforme necessário
-weights_path = "./facenet_keras.h5"  # Altere conforme necessário
+# Path to dataset
+dataset_path = "./dataset_faces"  # Update with your dataset path
 
-# Função para carregar o modelo FaceNet
-from tensorflow.keras.applications import InceptionResNetV2
-from tensorflow.keras.layers import Input
 
-def load_facenet_model(weights_path=None):
+# Load FaceNet model
+def load_facenet_model():
     """
-    Carrega o modelo FaceNet com pesos do ImageNet.
+    Load the FaceNet model for embedding extraction.
     """
-    print("Carregando modelo FaceNet com pesos do ImageNet...")
-    input_tensor = Input(shape=(160, 160, 3))
-    model = InceptionResNetV2(include_top=False, weights="imagenet", input_tensor=input_tensor, pooling="avg")
-    print("Modelo FaceNet carregado com sucesso (ImageNet).")
-    return model
+    print("Loading FaceNet model...")
+    embedder = FaceNet()  # This uses a compatible FaceNet model
+    print("FaceNet model loaded successfully.")
+    return embedder.model
 
-# Função para carregar e processar imagens
+
+# Load and preprocess images
 def load_and_preprocess_images(dataset_path):
     """
-    Carrega e processa imagens do dataset para o formato esperado pelo modelo.
+    Load and preprocess images for the model.
     """
-    print("Carregando e processando imagens...")
+    print("Loading and preprocessing images...")
     if not os.path.exists(dataset_path):
-        raise FileNotFoundError(f"Caminho do dataset não encontrado: {dataset_path}")
+        raise FileNotFoundError(f"Dataset path not found: {dataset_path}")
 
     images = []
     file_paths = []
@@ -43,52 +40,93 @@ def load_and_preprocess_images(dataset_path):
                 file_path = os.path.join(root, file)
                 image = cv2.imread(file_path)
                 if image is None:
-                    print(f"Falha ao carregar a imagem: {file_path}")
+                    print(f"Failed to load image: {file_path}")
                     continue
-                image = cv2.resize(image, (160, 160))
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0  # Normaliza para [0, 1]
+                image = cv2.resize(image, (160, 160))  # FaceNet input size
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0  # Normalize to [0, 1]
                 images.append(image)
                 file_paths.append(file_path)
-    print(f"{len(images)} imagens carregadas.")
+    print(f"{len(images)} images loaded and preprocessed.")
     return np.array(images), file_paths
 
-# Função para extrair embeddings
+
+# Extract embeddings
 def extract_embeddings(images, model):
     """
-    Extrai os embeddings faciais usando o modelo FaceNet.
+    Extract facial embeddings from images using the FaceNet model.
     """
-    print("Extraindo embeddings faciais...")
+    print("Extracting facial embeddings...")
     embeddings = []
     for i, image in enumerate(images):
         try:
             embedding = model.predict(np.expand_dims(image, axis=0))[0]
             embeddings.append(embedding)
         except Exception as e:
-            print(f"Erro ao processar a imagem {i}: {e}")
+            print(f"Error processing image {i}: {e}")
             embeddings.append(None)
     valid_embeddings = [emb for emb in embeddings if emb is not None]
-    print(f"{len(valid_embeddings)} embeddings válidos extraídos.")
+    print(f"{len(valid_embeddings)} valid embeddings extracted.")
     return np.array(valid_embeddings)
 
-# Função para clusterizar embeddings
-def cluster_embeddings(embeddings):
+
+# Perform clustering with K-Means
+def cluster_embeddings_kmeans(embeddings, n_clusters=10):
     """
-    Realiza a clusterização dos embeddings usando DBSCAN.
+    Cluster facial embeddings using K-Means clustering.
     """
-    print("Realizando clusterização com DBSCAN...")
-    if embeddings.shape[0] == 0:
-        print("Nenhum embedding disponível para clusterização.")
+    print("Performing K-Means clustering...")
+    if len(embeddings) == 0:
+        print("No embeddings available for clustering.")
         return []
-    embeddings = PCA(n_components=40).fit_transform(embeddings)  # Reduz dimensionalidade
-    clustering_model = DBSCAN(eps=0.5, min_samples=2, metric="cosine")
-    labels = clustering_model.fit_predict(embeddings)
-    print(f"Clusters identificados: {len(set(labels)) - (1 if -1 in labels else 0)}")
+    
+    # Normalize embeddings
+    embeddings = normalize(embeddings)
+    
+    # Dimensionality reduction for clustering
+    embeddings = PCA(n_components=40).fit_transform(embeddings)
+    
+    # K-Means clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    labels = kmeans.fit_predict(embeddings)
+    
+    print(f"Clusters created: {n_clusters}")
     return labels
 
-# Função para visualizar clusters
+
+# Enforce exactly 4 images per cluster
+def enforce_fixed_cluster_size(labels, file_paths, images, fixed_size=4):
+    """
+    Ensure each cluster contains exactly 'fixed_size' images.
+    """
+    print("Enforcing fixed cluster size...")
+    unique_labels = set(labels)
+    new_labels = []
+    new_images = []
+    new_file_paths = []
+    
+    for label in unique_labels:
+        # Find indices of images in this cluster
+        indices = [i for i, lbl in enumerate(labels) if lbl == label]
+        
+        # Randomly select `fixed_size` images from this cluster
+        if len(indices) >= fixed_size:
+            selected_indices = random.sample(indices, fixed_size)
+        else:
+            print(f"Cluster {label} has fewer than {fixed_size} images. Adjusting.")
+            selected_indices = indices  # Keep fewer images if the cluster is small
+        
+        # Add selected images and file paths
+        new_labels.extend([label] * len(selected_indices))
+        new_images.extend([images[i] for i in selected_indices])
+        new_file_paths.extend([file_paths[i] for i in selected_indices])
+    
+    return new_labels, new_file_paths, new_images
+
+
+# Visualize clusters
 def visualize_clusters(labels, file_paths):
     """
-    Exibe os clusters e os caminhos das imagens pertencentes a cada um.
+    Display the clusters and the file paths of images in each cluster.
     """
     unique_labels = set(labels)
     for label in unique_labels:
@@ -98,45 +136,52 @@ def visualize_clusters(labels, file_paths):
             print(f"  - {img_path}")
         print()
 
-# Função para mostrar imagens dos clusters
+
+# Show cluster images
 def show_cluster_images(labels, images):
     """
-    Exibe visualmente as imagens agrupadas em clusters.
+    Visually display images grouped by clusters.
     """
     unique_labels = set(labels)
     for label in unique_labels:
         cluster_images = [images[i] for i in range(len(labels)) if labels[i] == label]
         plt.figure(figsize=(10, 5))
-        for i, img in enumerate(cluster_images[:10]):  # Mostra no máximo 10 imagens por cluster
+        for i, img in enumerate(cluster_images[:10]):  # Show max 10 images per cluster
             plt.subplot(2, 5, i + 1)
             plt.imshow(img)
             plt.axis("off")
         plt.suptitle(f"Cluster {label}")
         plt.show()
 
-# Pipeline principal
+
+# Main pipeline
 def main():
     try:
-        # Carregar o modelo FaceNet
-        model = load_facenet_model(weights_path)
+        # Load FaceNet model
+        model = load_facenet_model()
 
-        # Carregar e processar imagens
+        # Load and preprocess images
         images, file_paths = load_and_preprocess_images(dataset_path)
 
-        # Extrair embeddings
+        # Extract embeddings
         embeddings = extract_embeddings(images, model)
 
-        # Realizar clusterização
+        # Perform clustering
         if len(embeddings) > 0:
-            labels = cluster_embeddings(embeddings)
+            labels = cluster_embeddings_kmeans(embeddings, n_clusters=10)  # Specify 10 clusters
+            
+            # Enforce exactly 4 images per cluster
+            labels, file_paths, images = enforce_fixed_cluster_size(labels, file_paths, images, fixed_size=4)
 
-            # Visualizar os clusters
+            # Visualize and show clusters
             visualize_clusters(labels, file_paths)
             show_cluster_images(labels, images)
         else:
-            print("Nenhum embedding foi extraído. Verifique os dados de entrada.")
+            print("No embeddings extracted. Check input data.")
     except Exception as e:
-        print(f"Erro na execução do pipeline: {e}")
+        print(f"Pipeline execution error: {e}")
 
+
+# Entry point
 if __name__ == "__main__":
     main()
