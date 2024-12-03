@@ -149,4 +149,4 @@ Output
 10 Clusters with exactly 4 images per cluster.
 Visualizations of clusters for easy interpretation.
 Contact
-For questions or feedback, please contact [Your Name/Email].
+For questions or feedback, please contact [Marcio Henrique/ mhdppeua@gmail.com].
